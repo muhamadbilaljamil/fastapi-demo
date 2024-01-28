@@ -1,40 +1,39 @@
-import sys
-sys.path.append("..")
-from fastapi import APIRouter
-from app.config.db import conn
-from models.index import users
-from schemas.index import User
+print("User Route")
+from fastapi import Depends, APIRouter, HTTPException
+from sqlalchemy.orm import Session
+from .. import controllers, models, schemas
+from ..config.db import SessionLocal, engine
+
+models.Base.metadata.create_all(bind=engine)
 
 user = APIRouter()
 
-@user.get("/")
-async def read_data():
-    return conn.execute(users.select()).fetchall()
 
-@user.get("/{id}")
-async def read_data():
-    return conn.execute(users.select().where(users.c.id == id)).fetchall()
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-@user.post("/")
-async def write_data(user:User):
-    conn.execute(users.insert().values(
-        name= user.name,
-        email= user.email,
-        password= user.password,
-        ))
-    return conn.execute(users.select()).fetchall()
+@user.get("/users/", response_model=list[schemas.User])
+def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    users = controllers.user.get_users(db, skip=skip, limit=limit)
+    return users
 
-@user.put("/{id}")
-async def read_data(id:int, user:User):
-    conn.execute(users.update().values(
-        name=user.name,
-        email= user.email,
-        password=user.password
-        ).where(users.c.id == id))
-    return conn.execute(users.select()).fetchall()
+@user.get("/users/{user_id}", response_model=schemas.User)
+def read_user(user_id: int, db: Session = Depends(get_db)):
+    db_user = controllers.user.get_user(db, user_id=user_id)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return db_user
 
-@user.get("/{id}")
-async def delete_data():
-    conn.execute(users.delete().where(users.c.id == id))
-    return conn.execute(users.select()).fetchall()
-    
+@user.post("/users/", response_model=schemas.User)
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    db_user = controllers.user.get_user_by_email(db, email=user.email)
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    return controllers.user.create_user(db=db, user=user)
+
+

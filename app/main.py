@@ -1,9 +1,6 @@
 from fastapi import FastAPI
-# from app.routes.index import user
-app = FastAPI()
+from .routes.user import user
 
-# app.include_router(user)
+app = FastAPI(swagger_ui_parameters={"syntaxHighlight": False})
 
-@app.get("/")
-def helth_check():
-    return "Server health is ok"
+app.include_router(user, tags=["Users"])
